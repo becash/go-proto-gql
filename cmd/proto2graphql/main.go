@@ -12,6 +12,7 @@ import (
 	"github.com/danielvladco/go-proto-gql/pkg/protoparser"
 	"github.com/vektah/gqlparser/v2/formatter"
 	"google.golang.org/protobuf/compiler/protogen"
+	descriptor "google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
@@ -34,15 +35,30 @@ var (
 	extension   = flag.String("ext", generator.DefaultExtension, "Extension of the graphql file, Default: '.graphql'")
 )
 
+func uniqueFiles(input []*descriptor.FileDescriptorProto) []*descriptor.FileDescriptorProto {
+	inResult := make(map[string]bool)
+	var result []*descriptor.FileDescriptorProto
+	for _, dsc := range input {
+		fileName := dsc.Name
+		if _, ok := inResult[*fileName]; !ok {
+			inResult[*fileName] = true
+			result = append(result, dsc)
+		}
+	}
+	return result
+}
+
 func main() {
 	flag.Var(&importPaths, "I", "Specify the directory in which to search for imports. May be specified multiple times. May be specified multiple times.")
 	flag.Var(&fileNames, "f", "Parse proto files and generate graphql based on the options given. May be specified multiple times.")
 	flag.Parse()
 	descs, err := protoparser.Parse(importPaths, fileNames)
 	fatal(err)
+
+	protoFiles := uniqueFiles(generator.ResolveProtoFilesRecursively(descs).AsFileDescriptorProto())
 	p, err := protogen.Options{}.New(&pluginpb.CodeGeneratorRequest{
 		FileToGenerate: fileNames,
-		ProtoFile:      generator.ResolveProtoFilesRecursively(descs).AsFileDescriptorProto(),
+		ProtoFile:      protoFiles,
 	})
 	fatal(err)
 	gqlDesc, err := generator.NewSchemas(descs, *merge, *svc, p)
