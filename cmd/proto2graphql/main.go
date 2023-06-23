@@ -32,7 +32,6 @@ var (
 	fileNames   = arrayFlags{}
 	svc         = flag.Bool("svc", false, "Use service annotations for nodes corresponding to a GRPC call")
 	merge       = flag.Bool("merge", false, "Merge all the proto files found in one directory into one graphql file")
-	typePrefix  = flag.Bool("type_prefix", false, "Prepend to all types a 'ServiceName' to prevent types collisions, or changing names if collisions are detected in future generation")
 	extension   = flag.String("ext", generator.DefaultExtension, "Extension of the graphql file, Default: '.graphql'")
 )
 
@@ -50,6 +49,11 @@ func uniqueFiles(input []*descriptor.FileDescriptorProto) []*descriptor.FileDesc
 }
 
 func main() {
+	config := &generator.Config{
+		TypePrefix: flag.Bool("type_prefix", false, "Prepend to all types a 'ServiceName' to prevent types collisions, or changing names if collisions are detected in future generation"),
+		GoModel:    flag.String("go_model", "", "Add to all types a directive go model to make bind automatically, in value of option set ROO directory"),
+	}
+
 	flag.Var(&importPaths, "I", "Specify the directory in which to search for imports. May be specified multiple times. May be specified multiple times.")
 	flag.Var(&fileNames, "f", "Parse proto files and generate graphql based on the options given. May be specified multiple times.")
 	flag.Parse()
@@ -62,7 +66,7 @@ func main() {
 		ProtoFile:      protoFiles,
 	})
 	fatal(err)
-	gqlDesc, err := generator.NewSchemas(descs, *merge, *svc, p, *typePrefix)
+	gqlDesc, err := generator.NewSchemas(descs, *merge, *svc, p, config)
 	fatal(err)
 	for _, schema := range gqlDesc {
 		if len(schema.FileDescriptors) < 1 {

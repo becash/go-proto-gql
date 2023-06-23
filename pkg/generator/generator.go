@@ -25,7 +25,7 @@ const (
 	DefaultExtension = "graphql"
 )
 
-func NewSchemas(descs []*desc.FileDescriptor, mergeSchemas, genServiceDesc bool, plugin *protogen.Plugin, typePrefix bool) (schemas SchemaDescriptorList, err error) {
+func NewSchemas(descs []*desc.FileDescriptor, mergeSchemas, genServiceDesc bool, plugin *protogen.Plugin, config *Config) (schemas SchemaDescriptorList, err error) {
 	var files []*descriptor.FileDescriptorProto
 	for _, d := range descs {
 		files = append(files, d.AsFileDescriptorProto())
@@ -41,7 +41,7 @@ func NewSchemas(descs []*desc.FileDescriptor, mergeSchemas, genServiceDesc bool,
 	if mergeSchemas {
 		schema := NewSchemaDescriptor(genServiceDesc, goref)
 		for _, file := range descs {
-			err := generateFile(file, schema, typePrefix)
+			err := generateFile(file, schema, config)
 			if err != nil {
 				return nil, err
 			}
@@ -52,7 +52,7 @@ func NewSchemas(descs []*desc.FileDescriptor, mergeSchemas, genServiceDesc bool,
 
 	for _, file := range descs {
 		schema := NewSchemaDescriptor(genServiceDesc, goref)
-		err := generateFile(file, schema, typePrefix)
+		err := generateFile(file, schema, config)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +63,7 @@ func NewSchemas(descs []*desc.FileDescriptor, mergeSchemas, genServiceDesc bool,
 	return
 }
 
-func generateFile(file *desc.FileDescriptor, schema *SchemaDescriptor, typePrefix bool) error {
+func generateFile(file *desc.FileDescriptor, schema *SchemaDescriptor, config *Config) error {
 	schema.FileDescriptors = append(schema.FileDescriptors, file)
 
 	for _, svc := range file.GetServices() {
@@ -76,12 +76,12 @@ func generateFile(file *desc.FileDescriptor, schema *SchemaDescriptor, typePrefi
 			if rpcOpts != nil && rpcOpts.Ignore != nil && *rpcOpts.Ignore {
 				continue
 			}
-			in, err := schema.CreateObjects(rpc.GetInputType(), true, typePrefix)
+			in, err := schema.CreateObjects(rpc.GetInputType(), true, config)
 			if err != nil {
 				return err
 			}
 
-			out, err := schema.CreateObjects(rpc.GetOutputType(), false, typePrefix)
+			out, err := schema.CreateObjects(rpc.GetOutputType(), false, config)
 			if err != nil {
 				return err
 			}
@@ -222,7 +222,7 @@ func (s *SchemaDescriptor) GetQuery() *RootDefinition {
 
 // make name be unique
 // just create a map and register every name
-func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, typePrefix bool) (name string) {
+func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, config *Config) (name string) {
 	var collisionPrefix string
 	var suffix string
 	if _, ok := d.(*desc.MessageDescriptor); input && ok {
@@ -237,7 +237,7 @@ func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, typePrefix 
 		collisionPrefix = CamelCaseSlice(strings.Split(d.GetFile().GetPackage(), packageSep))
 	}
 
-	if typePrefix {
+	if *config.TypePrefix {
 		name = collisionPrefix + typeSep + name
 	}
 
@@ -261,7 +261,7 @@ func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, typePrefix 
 	return
 }
 
-func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePrefix bool) (obj *ObjectDescriptor, err error) {
+func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, config *Config) (obj *ObjectDescriptor, err error) {
 	// the case if trying to resolve a primitive as a object. In this case we just return nil
 	if d == nil {
 		return
@@ -270,14 +270,37 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePref
 		return obj, nil
 	}
 
+	directive := &ast.DirectiveDefinition{
+		//Description: getDescription(oneof),
+		Name:      s.uniqueName(d, input, config),
+		Locations: []ast.DirectiveLocation{ast.LocationInputFieldDefinition},
+		Position:  &ast.Position{Src: &ast.Source{}},
+	}
+	//s.Directives[directive.Name] = directive
+
+	fieldDirective := &ast.Directive{
+		Name:     "goModel",
+		Position: &ast.Position{Src: &ast.Source{}},
+		//ParentDefinition: obj.Definition, TODO
+		Definition: directive,
+		Location:   ast.LocationInputFieldDefinition,
+	}
+
+	fieldDirective.Arguments = append(fieldDirective.Arguments, &ast.Argument{
+		Name:     "model",
+		Value:    &ast.Value{Raw: "salut", Kind: ast.StringValue},
+		Position: nil,
+	})
+
 	obj = &ObjectDescriptor{
 		Definition: &ast.Definition{
 			Description: getDescription(d),
-			Name:        s.uniqueName(d, input, typePrefix),
+			Name:        s.uniqueName(d, input, config),
 			Position:    &ast.Position{},
 		},
 		Descriptor: d,
 	}
+	obj.Directives = append(obj.Directives, fieldDirective)
 
 	s.createdObjects[createdObjectKey{d, input}] = obj
 
@@ -289,7 +312,7 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePref
 		if IsAny(dd) {
 			//TODO find a better way to handle any types
 			delete(s.createdObjects, createdObjectKey{d, input})
-			any := s.createScalar(s.uniqueName(dd, false, typePrefix), anyTypeDescription)
+			any := s.createScalar(s.uniqueName(dd, false, config), anyTypeDescription)
 			return any, nil
 		}
 
@@ -321,7 +344,7 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePref
 						continue
 					}
 					outputOneofRegistrar[oneof] = struct{}{}
-					field, err := s.createUnion(oneof, typePrefix)
+					field, err := s.createUnion(oneof, config)
 					if err != nil {
 						return nil, err
 					}
@@ -332,7 +355,7 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePref
 				// create oneofs as directives for input objects
 				directive := &ast.DirectiveDefinition{
 					Description: getDescription(oneof),
-					Name:        s.uniqueName(oneof, input, typePrefix),
+					Name:        s.uniqueName(oneof, input, config),
 					Locations:   []ast.DirectiveLocation{ast.LocationInputFieldDefinition},
 					Position:    &ast.Position{Src: &ast.Source{}},
 				}
@@ -346,7 +369,7 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, typePref
 				})
 			}
 
-			fieldObj, err := s.CreateObjects(resolveFieldType(df), input, typePrefix)
+			fieldObj, err := s.CreateObjects(resolveFieldType(df), input, config)
 			if err != nil {
 				return nil, err
 			}
@@ -685,11 +708,11 @@ func (s *SchemaDescriptor) createScalar(name string, description string) *Object
 	return obj
 }
 
-func (s *SchemaDescriptor) createUnion(oneof *desc.OneOfDescriptor, typePrefix bool) (*FieldDescriptor, error) {
+func (s *SchemaDescriptor) createUnion(oneof *desc.OneOfDescriptor, config *Config) (*FieldDescriptor, error) {
 	var types []string
 	var objTypes []*ObjectDescriptor
 	for _, choice := range oneof.GetChoices() {
-		obj, err := s.CreateObjects(resolveFieldType(choice), false, typePrefix)
+		obj, err := s.CreateObjects(resolveFieldType(choice), false, config)
 		if err != nil {
 			return nil, err
 		}
@@ -702,7 +725,7 @@ func (s *SchemaDescriptor) createUnion(oneof *desc.OneOfDescriptor, typePrefix b
 			Definition: &ast.Definition{
 				Kind:        ast.Object,
 				Description: getDescription(f),
-				Name:        s.uniqueName(choice, false, typePrefix),
+				Name:        s.uniqueName(choice, false, config),
 				Fields:      ast.FieldList{f.FieldDefinition},
 				Position:    &ast.Position{},
 			},
@@ -718,7 +741,7 @@ func (s *SchemaDescriptor) createUnion(oneof *desc.OneOfDescriptor, typePrefix b
 		Definition: &ast.Definition{
 			Kind:        ast.Union,
 			Description: getDescription(oneof),
-			Name:        s.uniqueName(oneof, false, typePrefix),
+			Name:        s.uniqueName(oneof, false, config),
 			Types:       types,
 			Position:    &ast.Position{},
 		},
