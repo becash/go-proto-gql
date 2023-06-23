@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PROTOC_VERSION=${PROTOC_VERSION:-"21.12"}
+PROTOC_VERSION=${PROTOC_VERSION:-"23.3"}
 
 ARCH=$(uname -m)
 case $ARCH in
