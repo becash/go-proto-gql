@@ -32,6 +32,7 @@ var (
 	fileNames   = arrayFlags{}
 	svc         = flag.Bool("svc", false, "Use service annotations for nodes corresponding to a GRPC call")
 	merge       = flag.Bool("merge", false, "Merge all the proto files found in one directory into one graphql file")
+	typePrefix  = flag.Bool("type_prefix", false, "Prepend to all types a 'ServiceName' to prevent types collisions, or changing names if collisions are detected in future generation")
 	extension   = flag.String("ext", generator.DefaultExtension, "Extension of the graphql file, Default: '.graphql'")
 )
 
@@ -61,7 +62,7 @@ func main() {
 		ProtoFile:      protoFiles,
 	})
 	fatal(err)
-	gqlDesc, err := generator.NewSchemas(descs, *merge, *svc, p)
+	gqlDesc, err := generator.NewSchemas(descs, *merge, *svc, p, *typePrefix)
 	fatal(err)
 	for _, schema := range gqlDesc {
 		if len(schema.FileDescriptors) < 1 {
