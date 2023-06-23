@@ -237,7 +237,7 @@ func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, config *Con
 		collisionPrefix = CamelCaseSlice(strings.Split(d.GetFile().GetPackage(), packageSep))
 	}
 
-	if *config.TypePrefix {
+	if *config.TypePrefix == true {
 		name = collisionPrefix + typeSep + name
 	}
 
@@ -270,28 +270,6 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, config *
 		return obj, nil
 	}
 
-	directive := &ast.DirectiveDefinition{
-		//Description: getDescription(oneof),
-		Name:      s.uniqueName(d, input, config),
-		Locations: []ast.DirectiveLocation{ast.LocationInputFieldDefinition},
-		Position:  &ast.Position{Src: &ast.Source{}},
-	}
-	//s.Directives[directive.Name] = directive
-
-	fieldDirective := &ast.Directive{
-		Name:     "goModel",
-		Position: &ast.Position{Src: &ast.Source{}},
-		//ParentDefinition: obj.Definition, TODO
-		Definition: directive,
-		Location:   ast.LocationInputFieldDefinition,
-	}
-
-	fieldDirective.Arguments = append(fieldDirective.Arguments, &ast.Argument{
-		Name:     "model",
-		Value:    &ast.Value{Raw: "salut", Kind: ast.StringValue},
-		Position: nil,
-	})
-
 	obj = &ObjectDescriptor{
 		Definition: &ast.Definition{
 			Description: getDescription(d),
@@ -300,7 +278,28 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, config *
 		},
 		Descriptor: d,
 	}
-	obj.Directives = append(obj.Directives, fieldDirective)
+	if *config.GoModel != "" {
+		directive := &ast.DirectiveDefinition{
+			//Description: getDescription(oneof),
+			Name:      s.uniqueName(d, input, config),
+			Locations: []ast.DirectiveLocation{ast.LocationInputFieldDefinition},
+			Position:  &ast.Position{Src: &ast.Source{}},
+		}
+		objDirective := &ast.Directive{
+			Name:     "goModel",
+			Position: &ast.Position{Src: &ast.Source{}},
+			//ParentDefinition: obj.Definition, TODO
+			Definition: directive,
+			Location:   ast.LocationInputFieldDefinition,
+		}
+
+		objDirective.Arguments = append(objDirective.Arguments, &ast.Argument{
+			Name:     "model",
+			Value:    &ast.Value{Raw: *config.GoModel + d.GetFullyQualifiedName(), Kind: ast.StringValue},
+			Position: nil,
+		})
+		obj.Directives = append(obj.Directives, objDirective)
+	}
 
 	s.createdObjects[createdObjectKey{d, input}] = obj
 
