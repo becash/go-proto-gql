@@ -1,6 +1,6 @@
 module github.com/danielvladco/go-proto-gql
 
-go 1.17
+go 1.19
 
 require (
 	github.com/99designs/gqlgen v0.17.33
@@ -11,7 +11,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rs/cors v1.9.0
 	github.com/vektah/gqlparser/v2 v2.5.3
-	google.golang.org/grpc v1.56.0
+	google.golang.org/grpc v1.56.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
 	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v2 v2.4.0
