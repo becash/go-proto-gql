@@ -237,7 +237,7 @@ func (s *SchemaDescriptor) uniqueName(d desc.Descriptor, input bool, config *Con
 		collisionPrefix = CamelCaseSlice(strings.Split(d.GetFile().GetPackage(), packageSep))
 	}
 
-	if *config.TypePrefix == true {
+	if config.TypePrefix != nil && *config.TypePrefix == true {
 		name = collisionPrefix + typeSep + name
 	}
 
@@ -278,7 +278,7 @@ func (s *SchemaDescriptor) CreateObjects(d desc.Descriptor, input bool, config *
 		},
 		Descriptor: d,
 	}
-	if *config.GoModel != "" {
+	if config.GoModel != nil && *config.GoModel != "" {
 		directive := &ast.DirectiveDefinition{
 			//Description: getDescription(oneof),
 			Name:      s.uniqueName(d, input, config),

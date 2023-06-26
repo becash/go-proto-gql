@@ -94,9 +94,9 @@ func generateFile(schema *generator.SchemaDescriptor, merge bool, config *genera
 	if config.Output != nil && *config.Output != "" {
 		output = *config.Output
 	} else {
-		output = schema.FileDescriptors[0].GetName()
+		output = resolveGraphqlFilename(schema.FileDescriptors[0].GetName(), merge, *extension)
 	}
-	sc, err := os.Create(resolveGraphqlFilename(output, merge, *extension))
+	sc, err := os.Create(output)
 	if err != nil {
 		return err
 	}

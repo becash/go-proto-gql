@@ -49,7 +49,10 @@ func main() {
 func generate(req *pluginpb.CodeGeneratorRequest) (outFiles []*pluginpb.CodeGeneratorResponse_File, err error) {
 	var genServiceDesc bool
 	var merge bool
+	var prefix bool
 	var extension = generator.DefaultExtension
+	var output string
+	config := &generator.Config{}
 	for _, param := range strings.Split(req.GetParameter(), ",") {
 		var value string
 		if i := strings.Index(param, "="); i >= 0 {
@@ -64,8 +67,17 @@ func generate(req *pluginpb.CodeGeneratorRequest) (outFiles []*pluginpb.CodeGene
 			if merge, err = strconv.ParseBool(value); err != nil {
 				return nil, err
 			}
+		case "prefix":
+			if prefix, err = strconv.ParseBool(value); err != nil {
+				return nil, err
+			}
+			config.TypePrefix = &prefix
 		case "ext":
 			extension = strings.Trim(value, ".")
+		case "go_model":
+			config.GoModel = &value
+		case "output":
+			config.Output = &value
 		}
 	}
 	p, err := protogen.Options{}.New(req)
@@ -77,17 +89,22 @@ func generate(req *pluginpb.CodeGeneratorRequest) (outFiles []*pluginpb.CodeGene
 		return nil, err
 	}
 
-	gqlDesc, err := generator.NewSchemas(descs, merge, genServiceDesc, p)
+	gqlDesc, err := generator.NewSchemas(descs, merge, genServiceDesc, p, config)
 	if err != nil {
 		return nil, err
 	}
 	for _, schema := range gqlDesc {
 		buff := &bytes.Buffer{}
 		formatter.NewFormatter(buff).FormatSchema(schema.AsGraphql())
-		protoFileName := schema.FileDescriptors[0].GetName()
+
+		if config.Output != nil && *config.Output != "" {
+			output = *config.Output
+		} else {
+			output = resolveGraphqlFilename(schema.FileDescriptors[0].GetName(), merge, extension)
+		}
 
 		outFiles = append(outFiles, &pluginpb.CodeGeneratorResponse_File{
-			Name:    proto.String(resolveGraphqlFilename(protoFileName, merge, extension)),
+			Name:    proto.String(output),
 			Content: proto.String(buff.String()),
 		})
 	}
