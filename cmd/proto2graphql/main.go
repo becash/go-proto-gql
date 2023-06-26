@@ -52,6 +52,7 @@ func main() {
 	config := &generator.Config{
 		TypePrefix: flag.Bool("type_prefix", false, "Prepend to all types a 'ServiceName' to prevent types collisions, or changing names if collisions are detected in future generation"),
 		GoModel:    flag.String("go_model", "", "Add to all types a directive go model to make bind automatically, in value of option set ROO directory"),
+		Output:     flag.String("output", "", "output path and file"),
 	}
 
 	flag.Var(&importPaths, "I", "Specify the directory in which to search for imports. May be specified multiple times. May be specified multiple times.")
@@ -73,11 +74,11 @@ func main() {
 			log.Fatalf("unexpected number of proto descriptors: %d for gql schema", len(schema.FileDescriptors))
 		}
 		if len(schema.FileDescriptors) > 1 {
-			err := generateFile(schema, true)
+			err := generateFile(schema, true, config)
 			fatal(err)
 			break
 		}
-		err := generateFile(schema, *merge)
+		err := generateFile(schema, *merge, config)
 		fatal(err)
 	}
 }
@@ -88,8 +89,14 @@ func fatal(err error) {
 	}
 }
 
-func generateFile(schema *generator.SchemaDescriptor, merge bool) error {
-	sc, err := os.Create(resolveGraphqlFilename(schema.FileDescriptors[0].GetName(), merge, *extension))
+func generateFile(schema *generator.SchemaDescriptor, merge bool, config *generator.Config) error {
+	var output string
+	if config.Output != nil && *config.Output != "" {
+		output = *config.Output
+	} else {
+		output = schema.FileDescriptors[0].GetName()
+	}
+	sc, err := os.Create(resolveGraphqlFilename(output, merge, *extension))
 	if err != nil {
 		return err
 	}
