@@ -602,8 +602,11 @@ func (s *SchemaDescriptor) createField(field *desc.FieldDescriptor, obj *ObjectD
 		Name:        ToLowerFirst(CamelCase(field.GetName())),
 		Type:        &ast.Type{Position: &ast.Position{}},
 		Position:    &ast.Position{},
+		Directives:  []*ast.Directive{},
 	}
-	fieldOpts := GraphqlFieldOptions(field.AsFieldDescriptorProto().GetOptions())
+	protoOpts := field.AsFieldDescriptorProto().GetOptions()
+	fieldOpts := GraphqlFieldOptions(protoOpts)
+
 	if fieldOpts != nil && fieldOpts.Name != nil {
 		fieldAst.Name = *fieldOpts.Name
 		directive := &ast.DirectiveDefinition{
@@ -622,7 +625,7 @@ func (s *SchemaDescriptor) createField(field *desc.FieldDescriptor, obj *ObjectD
 		}
 		s.Directives[directive.Name] = directive
 		if s.goRef != nil {
-			fieldAst.Directives = []*ast.Directive{{
+			fieldAst.Directives = append(fieldAst.Directives, &ast.Directive{
 				Name: directive.Name,
 				Arguments: []*ast.Argument{{
 					Name: "name",
@@ -636,9 +639,16 @@ func (s *SchemaDescriptor) createField(field *desc.FieldDescriptor, obj *ObjectD
 				Position: &ast.Position{},
 				//ParentDefinition: nil, TODO
 				Definition: directive,
-			}}
+			})
 		}
 	}
+
+	if protoOpts != nil && protoOpts.Deprecated != nil && *protoOpts.Deprecated == true {
+		fieldAst.Directives = append(fieldAst.Directives, &ast.Directive{
+			Name: "deprecated",
+		})
+	}
+
 	switch field.GetType() {
 	case descriptor.FieldDescriptorProto_TYPE_DOUBLE,
 		descriptor.FieldDescriptorProto_TYPE_FLOAT:
